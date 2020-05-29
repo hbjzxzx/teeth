@@ -1,19 +1,8 @@
-import SimpleITK as sitk
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from pathlib import Path
 import numpy as np
-from skimage.transform import rescale, resize, downscale_local_mean
 import cv2
 from utils import max_min_normal
-from skimage import measure
 import lv_set.drlse_algo as drlse
 from tqdm import tqdm
-
-
-def handle(picNum):
-    pass
-
 
 def postProcess(flevel):
     l = np.zeros_like(flevel)
@@ -73,5 +62,5 @@ def levelSet(image, seed):
     alfa = 0
     iter_refine = 10
     phi = drlse.drlse_edge(phi, g, lmda, mu, alfa, epsilon, timestep, iter_refine, potentialFunction)
-
-    return phi
+    postPhi = postProcess(phi)
+    return postPhi, phi
