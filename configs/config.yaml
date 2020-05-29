@@ -1,0 +1,21 @@
+data:
+  dataRoot: 'nii'
+  fileNameTemplate: 'pic{}.nii.gz'
+  fileTSeedTemplate: 'pic{}TSeed.nii.gz'
+  fileCrackTemplate: 'pic{}Crack.nii.gz'
+  tseedRange: [1, 19]
+  trainRange: [1, 37]
+  testRange: [37,38]
+  levelset:
+    range: [1, 19]
+
+  image:
+    height: 512
+    width: 512
+    normal: 16
+
+    gaussFilter: True
+    gKernelSize: 5
+    medianFilter: True
+    medKernelSize: 5
+
