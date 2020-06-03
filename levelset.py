@@ -1,8 +1,23 @@
 import numpy as np
 import cv2
-from utils import max_min_normal
+from utils import max_min_normal, getFileNames, readFromNii
 import lv_set.drlse_algo as drlse
 from tqdm import tqdm
+
+def doLevelSet(config):
+    picRange = config['data']['levelset']['range']
+    for i in picRange:
+        tseedFileName = getFileNames(i, config, 'tseed')
+        filename = getFileNames(i, config, 'file')
+        images = readFromNii(str(filename))
+        inits = readFromNii(str(tseedFileName))
+        result = []
+        for img, init in zip(images, inits):
+            if (np.max(init) == 0):
+                result.append(init)
+                continue
+            phi, _ = levelSet(img, init)
+            result.append(phi)
 
 def postProcess(flevel):
     l = np.zeros_like(flevel)

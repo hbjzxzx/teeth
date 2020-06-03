@@ -9,13 +9,12 @@ data:
   levelset:
     range: [1, 19]
 
-  image:
-    height: 512
-    width: 512
-    normal: 16
-
-    gaussFilter: True
-    gKernelSize: 5
-    medianFilter: True
-    medKernelSize: 5
+image:
+  height: 512
+  width: 512
+  normal: 16
+  gaussFilter: True
+  gKernelSize: 5
+  medianFilter: True
+  medKernelSize: 5
 

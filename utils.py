@@ -3,8 +3,6 @@ import cv2
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
 from  pathlib import Path
-from levelset import levelSet
-from tqdm import tqdm
 
 def normalImage(image, norm):
     if norm == 8:
@@ -41,24 +39,6 @@ def max_min_normal(im, maxd=8):
     maxI = np.max(im)
     im = im/maxI * maxd
     return im
-
-def doLevelSet(config):
-    picRange = config['data']['levelset']['range']
-    for i in picRange:
-        tseedFileName = getFileNames(i, config, 'tseed')
-        filename = getFileNames(i, config, 'file')
-        images = readFromNii(str(filename))
-        inits = readFromNii(str(tseedFileName))
-        result = []
-        for img, init in zip(images, inits):
-            if (np.max(init) == 0):
-                result.append(init)
-                continue
-            phi, _ = levelSet(img, init)
-            result.append(phi)
-
-
-
 
 
 def getFileNames(index, config, sp):
