@@ -3,21 +3,36 @@ import cv2
 from utils import max_min_normal, getFileNames, readFromNii
 import lv_set.drlse_algo as drlse
 from tqdm import tqdm
+import SimpleITK as sitk
+
+def main():
+    from config import  config
+    cfg = config('configs/config.yaml')
+    doLevelSet(cfg)
 
 def doLevelSet(config):
     picRange = config['data']['levelset']['range']
-    for i in picRange:
+    pbTotal = tqdm(picRange)
+    for i in pbTotal:
         tseedFileName = getFileNames(i, config, 'tseed')
         filename = getFileNames(i, config, 'file')
+        pbTotal.update()
+        pbTotal.set_description(f'handle {filename}')
         images = readFromNii(str(filename))
         inits = readFromNii(str(tseedFileName))
         result = []
-        for img, init in zip(images, inits):
+        pbSingle = tqdm(zip(images, inits))
+        for id, (img, init) in enumerate(pbSingle):
+            pbSingle.update()
+            pbSingle.set_description(f'handle slices {id}')
             if (np.max(init) == 0):
                 result.append(init)
                 continue
-            phi, _ = levelSet(img, init)
-            result.append(phi)
+            postphi, phi = levelSet(img, init)
+            result.append(postphi)
+        result = np.array(result)
+        fileSeedName = getFileNames(i, config, 'seed')
+        sitk.WriteImage(result, str(fileSeedName))
 
 def postProcess(flevel):
     l = np.zeros_like(flevel)
@@ -25,7 +40,7 @@ def postProcess(flevel):
     l = l.astype(np.uint8)
     re, _ = cv2.findContours(l, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    mask = np.ones_like(l)
+    mask = np.zeros_like(l)
     for i in range(len(re)):
         cv2.drawContours(mask, re, i, 1, cv2.FILLED)
 
@@ -70,7 +85,10 @@ def levelSet(image, seed):
         potentialFunction = 'double-well'  # default choice of potential function
 
     # start level set evolution
-    for n in tqdm(range(iter_outer)):
+    pb = tqdm(range(iter_outer))
+    for iteid, n in enumerate(pb):
+        pb.update()
+        pb.set_description(f'iter: {iteid+1}/{iter_outer}')
         phi = drlse.drlse_edge(phi, g, lmda, mu, alfa, epsilon, timestep, iter_inner, potentialFunction)
 
     # refine the zero level contour by further level set evolution with alfa=0
@@ -79,3 +97,6 @@ def levelSet(image, seed):
     phi = drlse.drlse_edge(phi, g, lmda, mu, alfa, epsilon, timestep, iter_refine, potentialFunction)
     postPhi = postProcess(phi)
     return postPhi, phi
+
+if __name__ == '__main__':
+    main()

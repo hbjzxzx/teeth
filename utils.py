@@ -46,6 +46,7 @@ def getFileNames(index, config, sp):
     fileNameTemplate = config['data']['fileNameTemplate']
     fileTSeedTemplate = config['data']['fileTSeedTemplate']
     fileCrackTemplate = config['data']['fileCrackTemplate']
+    fileSeedTemplate = config['data']['fileSeedTemplate']
     templates = [fileNameTemplate, fileTSeedTemplate, fileCrackTemplate]
 
     fileName, fileTSeed, fileCrack = list(map(lambda x: dataRoot / x.format(index), templates))
@@ -55,6 +56,8 @@ def getFileNames(index, config, sp):
         return  fileTSeed
     elif sp == 'tcrack':
         return fileCrack
+    elif sp == 'seed':
+        return fileSeedTemplate
     else:
         raise Exception('bad sp param')
 
