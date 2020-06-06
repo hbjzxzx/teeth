@@ -11,7 +11,7 @@ def main():
     doLevelSet(cfg)
 
 def doLevelSet(config):
-    picRange = config['data']['levelset']['range']
+    picRange =range(*config['data']['levelset']['range'])
     pbTotal = tqdm(picRange)
     for i in pbTotal:
         tseedFileName = getFileNames(i, config, 'tseed')
@@ -32,6 +32,7 @@ def doLevelSet(config):
             result.append(postphi)
         result = np.array(result)
         fileSeedName = getFileNames(i, config, 'seed')
+        result = sitk.GetImageFromArray(result)
         sitk.WriteImage(result, str(fileSeedName))
 
 def postProcess(flevel):

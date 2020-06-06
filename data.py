@@ -89,7 +89,8 @@ class class2set(baseset):
         cmask = self.getCmask(item)
         # 0 for none Crack 1 for exist Crack
         isCrack = self.gindexCrackLabel[item]
+        label = [0, 1] if isCrack else [1, 0]
         image = self.getNormData(item)
         image = np.float32(image)
         image = np.stack([image]*3, axis=0)
-        return image, isCrack
+        return image, label

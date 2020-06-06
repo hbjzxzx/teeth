@@ -31,7 +31,6 @@ writer = SummaryWriter(str(outputDir/thisRunName))
 # loss
 criterion = nn.CrossEntropyLoss()
 
-
 TrainDataSet = data.class2set(cfg, isTrain=True)
 TestDataSet = data.class2set(cfg, isTrain=False)
 
