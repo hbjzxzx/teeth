@@ -15,10 +15,11 @@ from utils import *
 configRoot = Path('configs')
 configFileName = Path('resnet.yaml')
 cfg = config(str(configRoot/configFileName))
+
 # data
 batchSize = 16
 shuffle = True
-numWorkers = 4
+numWorkers = 1
 classes = ['healthy', 'crack']
 
 # train
@@ -28,6 +29,7 @@ outputDir = Path('modelResNet2Class')
 thisRunName = Path('baseLineExp2ClsBal')
 modelWeightSave = Path('weightClsBal.pth')
 writer = SummaryWriter(str(outputDir/thisRunName))
+
 # loss
 criterion = nn.CrossEntropyLoss()
 
@@ -39,6 +41,7 @@ weights = []
 for _, l in TrainDataSet:
     weights.append(1-prate if l==1 else prate)
 trainSampler = WeightedRandomSampler(weights, len(TrainDataSet), replacement=True)
+
 TrainDataloader = DataLoader(TrainDataSet,
                                 batch_size=batchSize,
                              num_workers=numWorkers,

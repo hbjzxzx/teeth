@@ -3,6 +3,7 @@ data:
   fileNameTemplate: 'pic{}.nii.gz'
   fileTSeedTemplate: 'pic{}TSeed.nii.gz'
   fileCrackTemplate: 'pic{}Crack.nii.gz'
+  fileSeedTemplate: 'pic{}Seed.nii.gz'
   tseedRange: [1, 19]
   trainRange: [1, 37]
   testRange: [37,38]
