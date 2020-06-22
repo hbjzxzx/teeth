@@ -16,7 +16,7 @@ def reg(text):
         return func
     return inner
 
-@reg('resnet')
+@reg('resnet50')
 def getRestNet(**kwargs):
     config = kwargs['config']
     netName = config['train']['netname']

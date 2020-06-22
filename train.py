@@ -13,6 +13,7 @@ from data import class2set, imageSet
 from utils import *
 from AtNets import *
 import time
+import sys
 
 classes = ['healthy', 'crack']
 globalStep = 0
@@ -28,10 +29,10 @@ class ClsReCollector(Collectors):
         self.cnt = 0 
     
     def add_preds_labels(self, preds:torch.Tensor, labels:torch.Tensor):
-        predPro = torch.softmax(preds, dim=1)
+        predPro = torch.softmax(preds.detach(), dim=1)
         predPro = predPro[:,1]
-        self.rawPreds.append(predPro.detach().cpu())
-        self.rawLabels.append(labels.detach().cpu())
+        self.rawPreds.append(predPro.cpu())
+        self.rawLabels.append(labels.cpu())
         self.cnt += 1 
         
     def get_result(self):
@@ -53,7 +54,7 @@ class LossReCollector(Collectors):
     
 
     def add(self, loss:torch.Tensor):
-        self.lossAcc += loss.item()
+        self.lossAcc += loss.detach().item()
         self.cnt += 1
     
     def get(self):
@@ -98,7 +99,7 @@ class PNCollector(Collectors):
     
     def add(self, target:torch.Tensor):
         batch = len(target)
-        p = torch.sum(target).item()
+        p = torch.sum(target).detach().cpu().item()
         self.pos += p 
         self.neg += (batch - p)
 
@@ -106,25 +107,29 @@ class PNCollector(Collectors):
         return f'posIns:{self.pos:>3} negIns {self.neg:>3}' 
 
 def getSessionName(config):
-    balance = 'balance_' + 'On' if config['train']['balance'] else 'Off'
-    SplitOn = 'splitedOn_' + 'Entity' if config['data']['splitedOnEntity'] else 'images_{}'.format(config['data']['splitedImagesRate'])
-    PreTrainOn = 'PreTrain_' + 'On' if config['train']['pre_train'] else 'Off'
+    balance = 'balance_' + ('On' if config['train']['balance'] else 'Off')
+    SplitOn = 'splitedOn_' + ('Entity' if config['data']['splitedOnEntity'] else 'images_{}'.format(config['data']['splitedImagesRate']))
+    PreTrainOn = 'PreTrain_' + ('On' if config['train']['pre_train'] else 'Off')
     
-    lossInfo = 'CE' if config['loss']['type'] else 'FocalLoss_gamma{}'.format(config['loss']['gamma']) + 'posWeight_{}'.format(config['loss']['posWeight'])
+    lossInfo = ('CE' if config['loss']['type']=='CE' else 'FocalLoss_gamma{}'.format(config['loss']['gamma'])) + 'posWeight_{}'.format(config['loss']['posWeight'])
     optiInfo = 'learnRate_{}'.format(config['optim']['lr']) + 'weight_decay_{}'.format(config['optim']['weight_decay']) 
     strs = [balance, SplitOn, PreTrainOn, lossInfo, optiInfo]
     
     return '_'.join(strs) 
 
 def main():
-    net = 'resnet'
+    #net = 'resnet'
     #net = 'inceptionv3'
-
+    torch.backends.cudnn.benchmark=True
+    netConfig = sys.argv[1] + '.yaml'
     configRoot = Path('configs')
     dataConfigFileName = Path('dataconfig.yaml')
-    netConfigFileName = Path(f'{net}.yaml')
+    #netConfigFileName = Path(f'{net}.yaml')
+    netConfigFileName = configRoot/Path(netConfig)
+    assert netConfigFileName.exists(), f'file {str(netConfigFileName)} not exist'
     cfg = config(str(configRoot/dataConfigFileName))
-    cfg.mergeWith(str(configRoot/netConfigFileName))
+    cfg.mergeWith(str(netConfigFileName))
+    net = cfg['train']['netname']
 
     # data
     batchSize = cfg['train']['batch_size']
@@ -227,14 +232,19 @@ def main():
 
     try:
         for e in range(num_epochs):
+            s = time.time()
             trainCls(model, optimizer, Clscriterion, TrainDataloader, TestDataloader, 
                                 device, writer, e+1, 
-                                save_step, info_step, test_step, saveRoot)
+                                save_step, info_step, test_step, saveRoot, batchSize)
+            total = time.time() - s
+            e1time = total/60.0
+            left = (num_epochs - e -1)*e1time/60.0
+            print(f'epoch time ：{e/60.0:6.3f}min, left:{left:6.3f}hours')
         torch.save(model.state_dict(), str(saveRoot/Path('model_final.pth')))
     except KeyboardInterrupt:
         torch.save(model.state_dict(), str(saveRoot/Path('model_final_keyStop.pth')))
 
-def trainCls(model, opt, lossFunc, trainDataLoader, testDataLoader, device, writer, epoch, save_step, info_step, test_step, saveRoot):
+def trainCls(model, opt, lossFunc, trainDataLoader, testDataLoader, device, writer, epoch, save_step, info_step, test_step, saveRoot, batch):
     global globalStep 
    
     clsRec = ClsReCollector()
@@ -267,17 +277,18 @@ def trainCls(model, opt, lossFunc, trainDataLoader, testDataLoader, device, writ
             print("epoch:{:2d}, step:{:4d} totalStep:{:6d}".format(epoch, i+1, globalStep), end='  ')
             print("{}".format(clsLossReC), end=' ')
             print("{}".format(pnCe), end=' ')
-            print(f"{useTime:5.2f}s for {info_step} step, {useTime/info_step:5.2f}s for step")
-            
+            print(f"{useTime:5.2f}s for {info_step} step, {useTime/(info_step*batch):5.2f}s per image")
+
             test_probs, gt = clsRec.get_result()
             writer.add_pr_curve('healthy train', 1-gt , 1 - test_probs, global_step=globalStep)
             writer.add_pr_curve('crack train', gt , test_probs, global_step=globalStep)
-            clsRec.clear()
 
             writer.add_scalar('training cls loss', clsLossReC.get(), global_step=globalStep)
 
             for c in collectors:
                 c.clear()
+            torch.cuda.empty_cache()
+            info_timeS = time.time()
 
         if globalStep % test_step == test_step -1:
             stime = time.time()

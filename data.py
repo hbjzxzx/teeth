@@ -34,10 +34,12 @@ class imageSpDataSet(Dataset):
         crack = self.labels[item]
         im = torch.from_numpy(im)
         crack = torch.from_numpy(np.array(crack))
+        im = np.float32(im)
+        im = np.stack([im]*3, axis=0)
         return im, crack
         
     def getNormData(self, index):
-        image = self.pics[lindex]
+        image = self.pics[index]
         image = normalImage(image, self.norm)
         if self.config['image']['gaussFilter']:
             image = cv2.GaussianBlur(image, self.gkSize, 0)
@@ -50,7 +52,8 @@ class imageSet(object):
     def __init__(self, config):
         self.config = config
         self.test_size = config['data']['splitedImagesRate']
-        self.random_state = config['data']['splitedRandomSeed']
+        self.randomSeed = config['data']['splitedRandomSeed']
+        self._loadData(self.config)
     def _loadData(self, config):
         self.picRange = config['data']['splitedImagesRange']
 
@@ -87,9 +90,9 @@ class imageSet(object):
         pic_train, pic_test, label_train, label_test = train_test_split(self.rawPic, self.labels, 
                                                                         test_size=self.test_size, random_state=self.randomSeed)
         trainDataSet = imageSpDataSet(pic_train, label_train, self.config)
-        print('train Data p:{} n:{}  prate{:2.f}'.format(*self.getPNCnt(label_train)))
+        print('train Data p:{} n:{}  prate{:.2f}'.format(*self.getPNCnt(label_train)))
         testDataSet = imageSpDataSet(pic_test, label_test, self.config)
-        print('test Data p:{} n:{}  prate{:2.f}'.format(*self.getPNCnt(label_test)))
+        print('test Data p:{} n:{}  prate{:.2f}'.format(*self.getPNCnt(label_test)))
 
         return trainDataSet, testDataSet
 
