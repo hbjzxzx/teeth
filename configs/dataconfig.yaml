@@ -4,10 +4,22 @@ data:
   fileTSeedTemplate: 'pic{}TSeed.nii.gz'
   fileCrackTemplate: 'pic{}Crack.nii.gz'
   fileSeedTemplate: 'pic{}Seed.nii.gz'
-  tseedRange: [1, 19]
+
+  splitedOnEntity: On
+  splitedImagesRate: 0.2 # usage percentage 
+  splitedRandomSeed: 10
+  splitedImagesRange: [1, 38]
+
+  totalRange: [1, 38] # always use interval
+  tseedRange: [1, 19] # always use interval
+
+  rangeMode: interval
+  # default train and test range using patients
   trainRange: [1, 34]
   testRange: [34,38]
+
   levelset:
+    rangeMode: interval
     range: [1, 19]
 
 image:

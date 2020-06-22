@@ -43,7 +43,6 @@ def getRestNet(**kwargs):
     return resnet_model
 
 
-
 @reg('inceptionv3')
 def getIncep(**kwargs):
     config = kwargs['config']

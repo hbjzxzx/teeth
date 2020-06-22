@@ -9,6 +9,14 @@ dataG.tar
 model*/
 nii/
 showLabel/
+AT*/
+RestNetCam/
+jn_tflogs/
+pretrain/
+resnet/
+inception_net/
+nii.tar.back
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

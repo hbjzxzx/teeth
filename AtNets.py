@@ -159,10 +159,12 @@ class ATClassFPN(nn.Module):
         return torch.mul(F.upsample(At, size=(H,W), mode='bilinear'), destFeature)
 
 class FocalLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, posWeight):
         super(FocalLoss, self).__init__() 
         self.gamma =5
-        self.posBias = 0.9
+        self.posBias = posWeight 
+        print(f'using focal loss gamms:{self.gamma} PosWeight:{self.posBias}')
+
     
     def forward(self, input, target):
         input = torch.softmax(input, dim=1)
@@ -175,15 +177,20 @@ class FocalLoss(nn.Module):
         loss = loss*clsWeight
         return loss.mean()
 
-
 class ClsWeightLoss(nn.Module):
+    def __init__(self, posWeight):
+        super(ClsWeightLoss, self).__init__()
+        self.posWeight = posWeight
+        print(f'using ClsWeight pos Weight is {self.posWeight}')
+
+
     def forward(self, input, target):
         input = torch.softmax(input, dim=1)
         target = target.unsqueeze(1)
         target = torch.cat([1-target, target], dim=1)
         loss = -torch.log(input) * target
         loss = loss.sum(dim=1)
-        loss = torch.where(target[:, 1] == 1, loss * 8, loss) 
+        loss = torch.where(target[:, 1] == 1, loss * self.posWeight, loss * (1-self.posWeight)) 
         return loss.mean() 
 
 class ATMaskLoss(nn.Module):

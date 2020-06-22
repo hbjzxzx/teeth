@@ -5,7 +5,93 @@ import SimpleITK as sitk
 import cv2
 from pathlib import Path
 from utils import *
+import os
+from sklearn.model_selection import train_test_split
 
+class imageSpDataSet(Dataset):
+    def __init__(self, pics, labels, config):
+        self.pics = pics
+        self.labels = labels
+    
+        self.config = config
+        self.h = config['image']['height']
+        self.w = config['image']['width']
+        self.norm = config['image']['normal']
+        gk = config['image']['gKernelSize']
+        self.gkSize = (gk, gk)
+        self.medSize = config['image']['medKernelSize']
+
+        self.len = len(self.pics)
+        self.p = sum(labels)
+        n = self.len - self.p
+        self.prate = self.p/self.len 
+        
+    def __len__(self):
+        return self.len 
+    
+    def __getitem__(self, item):
+        im = self.getNormData(item) 
+        crack = self.labels[item]
+        im = torch.from_numpy(im)
+        crack = torch.from_numpy(np.array(crack))
+        return im, crack
+        
+    def getNormData(self, index):
+        image = self.pics[lindex]
+        image = normalImage(image, self.norm)
+        if self.config['image']['gaussFilter']:
+            image = cv2.GaussianBlur(image, self.gkSize, 0)
+        if self.config['image']['medianFilter']:
+            image = cv2.medianBlur(image, self.medSize)
+        image = resizeImage(image, self.h, self.w)
+        return image
+
+class imageSet(object):
+    def __init__(self, config):
+        self.config = config
+        self.test_size = config['data']['splitedImagesRate']
+        self.random_state = config['data']['splitedRandomSeed']
+    def _loadData(self, config):
+        self.picRange = config['data']['splitedImagesRange']
+
+        self.config = config
+        # map from index to data
+        self.rawPic = [] 
+        self.labels = []
+
+        for i in self.picRange:
+            fileName = getFileNames(i, self.config, 'file')
+            images = readFromNii(str(fileName))
+            for image in images:
+                self.rawPic.append(image)
+
+            fileCrackName = getFileNames(i, self.config, 'tcrack' )
+            crackMasks = readFromNii(str(fileCrackName))
+            for cmask in crackMasks:
+                iscrack = 1 if np.max(cmask) != 0 else 0
+                self.labels.append(iscrack)
+        p = sum(self.labels)
+        n = len(self.labels) - p
+        assert len(self.labels) == len(self.rawPic), 'Error, labels number can not match pictures'
+        self.len = len(self.labels)
+        self.prate = p/self.len
+        print("pLabel:{} nLabel:{} prate:{:.3f}".format(p, n, self.prate))
+
+    def getPNCnt(self, label):
+        p = sum(label)
+        n = len(label) - p
+        prate = p/(p+n)
+        return p, n, prate
+
+    def genTrainTest(self):
+        pic_train, pic_test, label_train, label_test = train_test_split(self.rawPic, self.labels, 
+                                                                        test_size=self.test_size, random_state=self.randomSeed)
+        trainDataSet = imageSpDataSet(pic_train, label_train, self.config)
+        print('train Data p:{} n:{}  prate{:2.f}'.format(*self.getPNCnt(label_train)))
+        testDataSet = imageSpDataSet(pic_test, label_test, self.config)
+        print('test Data p:{} n:{}  prate{:2.f}'.format(*self.getPNCnt(label_test)))
+
+        return trainDataSet, testDataSet
 
 class baseset(Dataset):
     def __init__(self, config, isTrain=True):
@@ -15,8 +101,8 @@ class baseset(Dataset):
         gk = config['image']['gKernelSize']
         self.gkSize = (gk, gk)
         self.medSize = config['image']['medKernelSize']
-        self.picRange = range(*config['data']['trainRange']) if isTrain else range(*config['data']['testRange'])
-        self.picRangeOfLevelSet = range(*config['data']['levelset']['range'])
+        self.picRange = config['data']['trainRange'] if isTrain else config['data']['testRange']
+        self.picRangeOfLevelSet = config['data']['levelset']['range']
         self.istrain = isTrain
         self.config = config
         # map from index to data
