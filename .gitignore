@@ -14,6 +14,7 @@ RestNetCam/
 jn_tflogs/
 pretrain/
 resnet/
+output/
 inception_net/
 nii.tar.back
 

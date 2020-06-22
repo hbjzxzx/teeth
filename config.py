@@ -11,7 +11,10 @@ class config(object):
                 print('construct config object failed,  check the config file path')
         if dc:
             self.mergeDict(self.configDic, dc)
-          
+        if 'rangeMode' not in self.configDic.keys():
+            self.rangeMode = 'interval'
+        else:
+            self.rangeMode = self.configDic['rangeMode']
 
     def mergeDict(self, dcOri:dict, dcNew:dict):
         for key, NewVal in dcNew.items():
@@ -21,8 +24,9 @@ class config(object):
                     # two dict merge
                     self.mergeDict(OriVal, NewVal)
                 else:
-                    dcOri[key] = NewVal
-                    print(f'warning: {key} value has been replace by {NewVal}, original is {OriVal}')
+                    if dcOri[key] != NewVal: 
+                        print(f'warning: {key} value has been replace by {NewVal}, original is {OriVal}')
+                        dcOri[key] = NewVal
             else:
                 # add new Key
                 dcOri[key] = NewVal 

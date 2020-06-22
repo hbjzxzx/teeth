@@ -1,0 +1,6 @@
+tensorboard
+pyyaml
+simpleitk
+opencv-python
+matplotlib
+scikit-learn

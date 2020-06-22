@@ -104,7 +104,7 @@ class PNCollector(Collectors):
     def __str__(self):
         return f'posIns:{self.pos:>3} negIns {self.neg:>3}' 
 
-def getSessionName(self, config):
+def getSessionName(config):
     balance = 'balance_' + 'On' if config['train']['balance'] else 'Off'
     SplitOn = 'splitedOn_' + 'Entity' if config['data']['splitedOnEntity'] else 'images_{}'.format(config['data']['splitedImagesRate'])
     PreTrainOn = 'PreTrain_' + 'On' if config['train']['pre_train'] else 'Off'
@@ -139,10 +139,11 @@ def main():
     outputDir = Path(cfg['train']['output_dir'])
     netoutdir = Path(netname)
 
-    thisRunName = Path(cfg['train']['session_dir'])
-    if thisRunName == 'auto'
+    thisRunName = cfg['train']['session_dir']
+    if thisRunName == 'auto':
         thisRunName = getSessionName(cfg)
         print(f'auto generate Session name: {thisRunName}')
+    thisRunName = Path(thisRunName)
 
     saveRoot = outputDir/netoutdir/thisRunName
     if saveRoot.exists():
@@ -161,11 +162,11 @@ def main():
 
     # loss
     lossType  = cfg['loss']['type']
-    posWeight = cfg['loss']['powWeight']
+    posWeight = cfg['loss']['posWeight']
     if lossType == 'CE':
         Clscriterion = ClsWeightLoss(posWeight) 
         print(f'using loss: CE ',end=' ')
-    elif lossType == 'FOCAL'
+    elif lossType == 'FOCAL':
         gamma = cfg['loss']['gamma']
         Clscriterion = FocalLoss(posWeight) 
         print(f'using loss: FOCALLoss gamma:{gamma}',end=' ')
