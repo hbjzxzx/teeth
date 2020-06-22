@@ -1,0 +1,22 @@
+train:
+    shuffle: on
+    num_worker: 4
+    batch_size: 16
+    epoch: 20
+    device: cuda
+    output_dir: inception_net
+    session_dir: balanceOnDataPreTrainOn
+    balance: on
+    save_step: 2000
+    pre_train: on
+    netname: inceptionv3
+    resume: off
+    resume_path:  /home/zhenxing/code/tc/inception_net/inceptionv3/balanceOnDataPreTrainOff/model_final.pth
+
+test:
+    device: gpu
+    dir_name: test_out
+
+
+
+

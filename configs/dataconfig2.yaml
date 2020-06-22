@@ -5,17 +5,17 @@ data:
   fileCrackTemplate: 'pic{}Crack.nii.gz'
   fileSeedTemplate: 'pic{}Seed.nii.gz'
   tseedRange: [1, 19]
-  trainRange: [1, 37]
-  testRange: [37,38]
+  trainRange: [1, 19]
+  testRange: [20,24]
   levelset:
     range: [1, 19]
 
 image:
   height: 512
   width: 512
-  normal: 16
-  gaussFilter: True
+  normal: 8
+  gaussFilter: False
   gKernelSize: 5
-  medianFilter: True
+  medianFilter: False
   medKernelSize: 5
 

@@ -2,14 +2,14 @@ train:
     shuffle: on
     num_worker: 4
     batch_size: 8
-    epoch: 20
+    epoch: 100
     device: cuda
-    output_dir: resnet
-    session_dir: balanceOnDataPreTrainOnWithWD
+    output_dir: ATClsFPN
+    session_dir: BonPreOnSoftAtSoftFocalLossGm5
     balance: on
     save_step: 2000
     pre_train: on
-    netname: resnet50
+    netname: ATresnet
     resume: off
     resume_path: None
 

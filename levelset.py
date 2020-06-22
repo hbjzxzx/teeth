@@ -4,10 +4,11 @@ from utils import max_min_normal, getFileNames, readFromNii
 import lv_set.drlse_algo as drlse
 from tqdm import tqdm
 import SimpleITK as sitk
+import matplotlib.pyplot as plt
 
 def main():
     from config import  config
-    cfg = config('configs/config.yaml')
+    cfg = config('configs/dataconfig.yaml')
     doLevelSet(cfg)
 
 def doLevelSet(config):
@@ -54,6 +55,7 @@ def levelSet(image, seed):
     im = cv2.medianBlur(im, 5)
 
     init = np.copy(seed)
+    init = init.astype(np.int32)
     init[init == 1] = -2
     init[init == 0] = 2
 

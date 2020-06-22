@@ -3,6 +3,7 @@ import cv2
 import SimpleITK as sitk
 import matplotlib.pyplot as plt
 from  pathlib import Path
+import shutil
 
 def normalImage(image, norm):
     if norm == 8:

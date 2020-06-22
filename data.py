@@ -16,6 +16,7 @@ class baseset(Dataset):
         self.gkSize = (gk, gk)
         self.medSize = config['image']['medKernelSize']
         self.picRange = range(*config['data']['trainRange']) if isTrain else range(*config['data']['testRange'])
+        self.picRangeOfLevelSet = range(*config['data']['levelset']['range'])
         self.istrain = isTrain
         self.config = config
         # map from index to data
@@ -64,7 +65,7 @@ class class2set(baseset):
         p = sum(self.gindexCrackLabel)
         n = self.len - p
         self.prate = p/self.len
-        print("pLabel:{} nLabel:{}".format(p, n))
+        print("pLabel:{} nLabel:{} prate:{:.3f}".format(p, n, self.prate))
 
     def getCmask(self, index):
         p, lindex = self.gindex2lindex[index]
@@ -94,3 +95,44 @@ class class2set(baseset):
         image = np.float32(image)
         image = np.stack([image]*3, axis=0)
         return torch.from_numpy(image), torch.from_numpy(np.array(label))
+
+
+class class2setWithATMask(class2set):
+
+    def __init__(self, config, isTrain=True):
+        super().__init__(config, isTrain)
+        self.__loadATMask()
+
+
+    def __loadATMask(self):
+        self.rawATMask = {}
+        cnt = 0
+        for i in self.picRange:
+            fileNameSeed = getFileNames(i, self.config, 'seed' )
+            try:
+                crackMask = readFromNii(str(fileNameSeed))
+            except Exception:
+                continue
+            self.rawATMask[i] = crackMask
+            cnt += 1
+        print(f'load AT instance {cnt}')
+
+
+    def getMachATMask(self, index):
+        p, lindex = self.gindex2lindex[index]
+        if p in self.rawATMask.keys():
+            atmask = self.rawATMask[p][lindex]
+            atmask = resizeImage(atmask, self.h, self.w)
+            atmask = resizeImage(atmask, 16, 16)
+            atmask = atmask.astype(np.int32)
+            #atmask = atmask - np.min(atmask) 
+            #atmask = atmask / np.max(atmask)
+            assert np.max(atmask) == 1 or np.max(atmask) == 0
+        else:
+            atmask = np.ones((16,16), dtype=np.int32) * -1
+        return atmask
+
+    def __getitem__(self, item):
+        image, label = super(class2setWithATMask, self).__getitem__(item)
+        Atmask = self.getMachATMask(item)
+        return image, label, torch.from_numpy(Atmask)
