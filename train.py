@@ -31,7 +31,7 @@ class ClsReCollector(Collectors):
         predPro = torch.softmax(preds, dim=1)
         predPro = predPro[:,1]
         self.rawPreds.append(predPro.detach().cpu())
-        self.rawLabels.append(labels.detach.cpu())
+        self.rawLabels.append(labels.detach().cpu())
         self.cnt += 1 
         
     def get_result(self):
@@ -97,9 +97,10 @@ class PNCollector(Collectors):
         self.neg = 0
     
     def add(self, target:torch.Tensor):
-        batch, _  = target.size()
-        self.pos += torch.sum(labels).item()
-        self.neg += batch - self.pos 
+        batch = len(target)
+        p = torch.sum(target).item()
+        self.pos += p 
+        self.neg += (batch - p)
 
     def __str__(self):
         return f'posIns:{self.pos:>3} negIns {self.neg:>3}' 
@@ -111,7 +112,9 @@ def getSessionName(config):
     
     lossInfo = 'CE' if config['loss']['type'] else 'FocalLoss_gamma{}'.format(config['loss']['gamma']) + 'posWeight_{}'.format(config['loss']['posWeight'])
     optiInfo = 'learnRate_{}'.format(config['optim']['lr']) + 'weight_decay_{}'.format(config['optim']['weight_decay']) 
-    return balance + SplitOn + PreTrainOn + lossInfo + optiInfo 
+    strs = [balance, SplitOn, PreTrainOn, lossInfo, optiInfo]
+    
+    return '_'.join(strs) 
 
 def main():
     net = 'resnet'
@@ -202,15 +205,16 @@ def main():
                                     batch_size=batchSize,
                                     shuffle=shuffle,
                                     num_workers=numWorkers)
-    if cfg['optim']['type'] == 'SGD':
-        lr = cfg['optim']['lr']
-        m = cfg['optim']['momentum']
-        wd = cfg['optim']['weight_decay']
-        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=m, weight_decay=wd)
-        print(f'using optim{SGD} lr:{lr} momentum:{m} weight_decay:{wd}')
 
     print(f'loading mode:{net}')
     model = regNets[net](config=cfg)
+    if cfg['optim']['type'] == 'SGD':
+        lr =cfg['optim']['lr']
+        m = cfg['optim']['momentum']
+        wd = cfg['optim']['weight_decay']
+        optimizer = optim.SGD(model.parameters(), lr=lr, momentum=m, weight_decay=wd)
+        print(f'using optim SGD lr:{lr} momentum:{m} weight_decay:{wd}')
+
     dataiter = iter(TrainDataloader)
     images, labels = dataiter.next()
     imgGrid = torchvision.utils.make_grid(images)
@@ -225,12 +229,12 @@ def main():
         for e in range(num_epochs):
             trainCls(model, optimizer, Clscriterion, TrainDataloader, TestDataloader, 
                                 device, writer, e+1, 
-                                save_step, info_step, test_step)
+                                save_step, info_step, test_step, saveRoot)
         torch.save(model.state_dict(), str(saveRoot/Path('model_final.pth')))
     except KeyboardInterrupt:
         torch.save(model.state_dict(), str(saveRoot/Path('model_final_keyStop.pth')))
 
-def trainCls(model, opt, lossFunc, trainDataLoader, testDataLoader, device, writer, epoch, save_step, info_step, test_step):
+def trainCls(model, opt, lossFunc, trainDataLoader, testDataLoader, device, writer, epoch, save_step, info_step, test_step, saveRoot):
     global globalStep 
    
     clsRec = ClsReCollector()
@@ -240,6 +244,7 @@ def trainCls(model, opt, lossFunc, trainDataLoader, testDataLoader, device, writ
     collectors = [clsRec, clsLossReC, pnCe]
     
     model.train()
+    info_timeS = time.time()
     for i, data in enumerate(trainDataLoader):
         globalStep += 1
         inputs, labels = data[0].to(device), data[1].to(device)
@@ -247,27 +252,29 @@ def trainCls(model, opt, lossFunc, trainDataLoader, testDataLoader, device, writ
         out = model(inputs)
         loss = lossFunc(out, labels)
         loss.backward()
-        optimizer.step()
+        opt.step()
 
         clsRec.add_preds_labels(out, labels)
         clsLossReC.add(loss)         
         pnCe.add(target=labels)
 
         if globalStep % save_step == save_step-1:
-            ckp = Path(f'checkpoint_{e+1}_{i+1}_{globalStep+1}.pth')
+            ckp = Path(f'checkpoint_{epoch}_{globalStep+1}.pth')
             torch.save(model.state_dict(), str(saveRoot/ckp))
 
         if globalStep % info_step  == info_step-1:
+            useTime = time.time() - info_timeS
             print("epoch:{:2d}, step:{:4d} totalStep:{:6d}".format(epoch, i+1, globalStep), end='  ')
             print("{}".format(clsLossReC), end=' ')
-            print("{}".format(pnCe))
+            print("{}".format(pnCe), end=' ')
+            print(f"{useTime:5.2f}s for {info_step} step, {useTime/info_step:5.2f}s for step")
             
-            predsProb, gt = clsRec.get_result()
+            test_probs, gt = clsRec.get_result()
             writer.add_pr_curve('healthy train', 1-gt , 1 - test_probs, global_step=globalStep)
             writer.add_pr_curve('crack train', gt , test_probs, global_step=globalStep)
             clsRec.clear()
 
-            writer.add_scalar('training cls loss', clsLossReC, global_step=globalStep)
+            writer.add_scalar('training cls loss', clsLossReC.get(), global_step=globalStep)
 
             for c in collectors:
                 c.clear()
@@ -275,18 +282,18 @@ def trainCls(model, opt, lossFunc, trainDataLoader, testDataLoader, device, writ
         if globalStep % test_step == test_step -1:
             stime = time.time()
             print('start tesing:  ',end='')
-            testCls(model, lossFunc, testDataLoader, device, writer)
+            testCls(model, lossFunc, testDataLoader, device, writer, globalStep)
             etime = time.time() - stime
-            print(f'testing done time:{etime:5}s')
+            print(f'testing done time:{etime:5.2f}s')
 
-def testCls(model:torch.nn.Module, lossFunc, testDataLoader, device, writer):
+def testCls(model:torch.nn.Module, lossFunc, testDataLoader, device, writer, step):
     model.eval()
     clsRec = ClsReCollector()
     lossRec = LossReCollector('Testing Loss') 
     with torch.no_grad():
-        for data in testdata:
+        for data in testDataLoader:
             inputs, labels = data[0].to(device), data[1].to(device)
-            output = net(inputs)
+            output = model(inputs)
             ls = lossFunc(output, labels)
 
             clsRec.add_preds_labels(output, labels)
