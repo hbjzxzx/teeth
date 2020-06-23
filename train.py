@@ -68,7 +68,7 @@ class LossReCollector(Collectors):
         self.cnt = 0
     
     def __str__(self):
-        return f'{self.lossName:5s}:{self.get():.2f}'
+        return f'{self.lossName:5s}:{self.get():.4f}'
 
 
 class ATReCollector(Collectors):
@@ -239,7 +239,7 @@ def main():
             total = time.time() - s
             e1time = total/60.0
             left = (num_epochs - e -1)*e1time/60.0
-            print(f'epoch time ：{e/60.0:6.3f}min, left:{left:6.3f}hours')
+            print(f'epoch time ：{total/60.0:6.3f}min, left:{left:6.3f}hours')
         torch.save(model.state_dict(), str(saveRoot/Path('model_final.pth')))
     except KeyboardInterrupt:
         torch.save(model.state_dict(), str(saveRoot/Path('model_final_keyStop.pth')))
@@ -277,7 +277,7 @@ def trainCls(model, opt, lossFunc, trainDataLoader, testDataLoader, device, writ
             print("epoch:{:2d}, step:{:4d} totalStep:{:6d}".format(epoch, i+1, globalStep), end='  ')
             print("{}".format(clsLossReC), end=' ')
             print("{}".format(pnCe), end=' ')
-            print(f"{useTime:5.2f}s for {info_step} step, {useTime/(info_step*batch):5.2f}s per image")
+            print(f"{useTime:5.4f}s for {info_step} step, {useTime/(info_step*batch):5.4f}s per image")
 
             test_probs, gt = clsRec.get_result()
             writer.add_pr_curve('healthy train', 1-gt , 1 - test_probs, global_step=globalStep)
