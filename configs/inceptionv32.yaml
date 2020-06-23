@@ -18,7 +18,7 @@ train:
     resume_path: None
     
 data:
-    splitedOnEntity: on # split on images or patients
+    splitedOnEntity: off # split on images or patients
     splitedImagesRate: 0.2 # if split on patients, the rates of split
 
     rangeMode: interval
