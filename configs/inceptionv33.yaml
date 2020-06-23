@@ -26,7 +26,7 @@ data:
     testRange: [34,38]
 
 loss:
-    type: CE  # support CE or FOCAL
+    type: FOCAL  # support CE or FOCAL
     gamma: 5 # FOCAL Gamma
     posWeight: 0.9 
 

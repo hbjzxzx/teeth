@@ -62,6 +62,7 @@ def getIncep(**kwargs):
     if pretrain:
         print('loading weights from pretraind pth file')
         model.load_state_dict(torch.load(str(pretrainPath)))
+        model.fc = nn.Linear(2048, 2)
     elif resume:
         model.load_state_dict(torch.load(str(resume_path)))
     return model
