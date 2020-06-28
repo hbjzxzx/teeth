@@ -93,6 +93,6 @@ def getATResnet(**kwargs):
 def getARClsResnet(**kwargs):
     return ATClass()
 
-@reg('ATClsFPNResnet')
+@reg('ResnetFPN')
 def getATCLSFPNnet(**kwargs):
     return ATClassFPN()

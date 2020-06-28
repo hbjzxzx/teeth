@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from pathlib import Path
 from models import regNets
 from config import config
-from data import class2set, imageSet
+from data import class2set, imageSet, class2setWithATMask
 from utils import *
 from AtNets import *
 import time
@@ -17,105 +17,6 @@ import sys
 
 classes = ['healthy', 'crack']
 globalStep = 0
-
-class Collectors(object):
-    def clear(self):
-        raise NotImplemented()
-
-class ClsReCollector(Collectors):
-    def __init__(self):
-        self.rawPreds = []
-        self.rawLabels = []
-        self.cnt = 0 
-    
-    def add_preds_labels(self, preds:torch.Tensor, labels:torch.Tensor):
-        predPro = torch.softmax(preds.detach(), dim=1)
-        predPro = predPro[:,1]
-        self.rawPreds.append(predPro.cpu())
-        self.rawLabels.append(labels.cpu())
-        self.cnt += 1 
-        
-    def get_result(self):
-        Pred = torch.cat(self.rawPreds)
-        Label = torch.cat(self.rawLabels)
-        return Pred, Label  
-    
-    def clear(self):
-        self.rawLabels.clear()
-        self.rawPreds.clear()
-        self.cnt = 0
-
-
-class LossReCollector(Collectors):
-    def __init__(self, name):
-        self.lossName = name
-        self.lossAcc = 0.0
-        self.cnt = 0
-    
-
-    def add(self, loss:torch.Tensor):
-        self.lossAcc += loss.detach().item()
-        self.cnt += 1
-    
-    def get(self):
-        if self.cnt == 0:
-            return -1
-        else:
-            return self.lossAcc / self.cnt
-    
-    def clear(self):
-        self.lossAcc = 0.0
-        self.cnt = 0
-    
-    def __str__(self):
-        return f'{self.lossName:5s}:{self.get():.4f}'
-
-
-class ATReCollector(Collectors):
-    def __init__(self,name, topK=1):
-        self.AT = []
-        self.name = name
-        self.topK = topK
-    
-    def clear(self):
-        self.AT.clear()
-
-    def add_pred(self, ats:torch.Tensor):
-        at = ats[:self.topK].detach().cpu()
-        self.AT.append(at)
-
-    def get(self):
-        return torch.cat(self.AT)
-
-
-class PNCollector(Collectors):
-    def __init__(self):
-        self.pos = 0
-        self.neg = 0
-    
-    def clear(self):
-        self.pos = 0
-        self.neg = 0
-    
-    def add(self, target:torch.Tensor):
-        batch = len(target)
-        p = torch.sum(target).detach().cpu().item()
-        self.pos += p 
-        self.neg += (batch - p)
-
-    def __str__(self):
-        return f'posIns:{self.pos:>3} negIns {self.neg:>3}' 
-
-def getSessionName(config):
-    balance = 'balance_' + ('On' if config['train']['balance'] else 'Off')
-    SplitOn = 'splitedOn_' + ('Entity' if config['data']['splitedOnEntity'] else 'images_{}'.format(config['data']['splitedImagesRate']))
-    PreTrainOn = 'PreTrain_' + ('On' if config['train']['pre_train'] else 'Off')
-    
-    lossInfo = ('CE' if config['loss']['type']=='CE' else 'FocalLoss_gamma{}'.format(config['loss']['gamma'])) + 'posWeight_{}'.format(config['loss']['posWeight'])
-    optiInfo = 'learnRate_{}'.format(config['optim']['lr']) + 'weight_decay_{}'.format(config['optim']['weight_decay']) 
-    strs = [balance, SplitOn, PreTrainOn, lossInfo, optiInfo]
-    
-    return '_'.join(strs) 
 
 def main():
     #net = 'resnet'
@@ -137,7 +38,7 @@ def main():
     numWorkers = cfg['train']['num_worker']
     balance = cfg['train']['balance']
     splitOnImage = cfg['data']['splitedOnEntity']    
-
+    useATLabels = cfg['train']['useAtLabel']
     
     # train
     netname = cfg['train']['netname']
@@ -178,13 +79,19 @@ def main():
         gamma = cfg['loss']['gamma']
         Clscriterion = FocalLoss(posWeight) 
         print(f'using loss: FOCALLoss gamma:{gamma}',end=' ')
-    print(f'powWeight:{posWeight}')
+    print(f'posWeight:{posWeight}')
 
     
     if cfg['data']['splitedOnEntity']:
-        TrainDataSet = class2set(cfg, isTrain=True)
-        TestDataSet = class2set(cfg, isTrain=False)
+        if useATLabels:
+            TrainDataSet = class2setWithATMask(cfg, isTrain=True)
+            TestDataSet = class2setWithATMask(cfg, isTrain=False)
+        else:
+            TrainDataSet = class2set(cfg, isTrain=True)
+            TestDataSet = class2set(cfg, isTrain=False)
     else:
+        if useATLabels:
+            raise NotImplementedError('can use image splited when turn on useATLabel')
         dset = imageSet(cfg) 
         TrainDataSet, TestDataSet = dset.genTrainTest()
 
@@ -230,10 +137,16 @@ def main():
     global globalStep
     globalStep = 0
 
+    if useLabels:
+        trainMethod = trainClsWithAt
+        lossFunc = [Clscriterion, ATMaskLoss()]
+    else:
+        trainMethod = trainCls
+        lossFunc = Clscriterion
     try:
         for e in range(num_epochs):
             s = time.time()
-            trainCls(model, optimizer, Clscriterion, TrainDataloader, TestDataloader, 
+            trainMethod(model, optimizer, lossFunc, TrainDataloader, TestDataloader, 
                                 device, writer, e+1, 
                                 save_step, info_step, test_step, saveRoot, batchSize)
             total = time.time() - s
@@ -297,7 +210,7 @@ def trainCls(model, opt, lossFunc, trainDataLoader, testDataLoader, device, writ
             etime = time.time() - stime
             print(f'testing done time:{etime:5.2f}s')
 
-def testCls(model:torch.nn.Module, lossFunc, testDataLoader, device, writer, step):
+def testCls(model, lossFunc, testDataLoader, device, writer, step):
     model.eval()
     clsRec = ClsReCollector()
     lossRec = LossReCollector('Testing Loss') 
@@ -317,6 +230,114 @@ def testCls(model:torch.nn.Module, lossFunc, testDataLoader, device, writer, ste
     writer.add_pr_curve('Test Crack PR', gt , test_probs, global_step=step)
     model.train()
 
+def trainClsWithAt(model, opt, lossFuncs, trainDataLoader, testDataLoader, device, writer, epoch, save_step, info_step, test_step, saveRoot, batch):
+    global globalStep
+    lossClsRc = LossReCollector('train cls Loss')
+    lossAtRc = LossReCollector('train at loss')
+    lossTotalRc = LossReCollector('train loss')
+    lossAt_PosRc = LossReCollector('train at pos loss')
+    lossAt_NegRc = LossReCollector('train at neg loss')
+
+    clsoutRc = ClsReCollector() 
+    atoutRc = ATReCollector()
+    attargetRc = ATReCollector()
+    pnRc = PNCollector()
+
+    collectors = [lossClsRc, lossAtRc, lossTotalRc,
+            lossAt_PosRc, lossAt_NegRc,
+            clsoutRc, atoutRc,attargetRc, pnRc]
+
+    clsLossFunc = lossFuncs[0]
+    atLossFunc =lossFuncs[1]
+
+    model.train()
+    info_timeS = time.time()
+    for i, data in enumerate(trainDataLoader):
+        globalStep += 1
+        inputs, labels, atmask = data[0].to(device), data[1].to(device), data[2].to(device) 
+        opt.zero_grad()
+        clsout, rpn = model(inputs)
+        
+        clsloss = clsLossFunc(clsout, labels)
+        ploss, nloss = atLossFunc(rpn, atmask)
+        loss =  ploss + nloss + clsloss
+        loss.backward()
+        opt.step()
+
+        lossAtRc.add(ploss+nloss)
+        lossAt_PosRc.add(ploss) 
+        lossAt_NegRc.add(nloss)
+        lossClsRc.add(clsloss)
+        lossTotalRc.add(loss)
+
+        clsoutRc.add_preds_labels(clsout, labels)
+        atoutRc.add_pred(rpn)
+        attargetRc.add_pred(atmask)
+        pnRc.add(labels)
+
+        if globalStep % save_step == save_step-1:
+            ckp = Path(f'checkpoint_{epoch}_{globalStep}.pth')
+            torch.save(model.state_dict(), str(saveRoot/ckp))
+        if globalStep % test_step == test_step-1:
+            testClsWithAt(model, [clsLossFunc, atLossFunc], testDataLoader, device, writer, globalStep)
+        if globalStep % info_step == info_step-1:
+            useTime = time.time() - info_timeS
+            print("epoch:{:2d}, step:{:4d} totalStep:{:6d}".format(epoch, i+1, globalStep), end='  ')
+            print("{}".format(lossClsRc), end=' ')
+            print("{}".format(pnRc), end=' ')
+            print("{}".format(lossAtRc), end=' ')
+            print(f"{useTime:5.4f}s for {info_step} step, {useTime/(info_step*batch):5.4f}s per image")
+            
+
+            atRcResult = atoutRc.get()
+            writer.add_images('train rpn pred', atRcResult, globalStep)
+            atTargetRcResult = attargetRc.get()
+            writer.add_images('train rpn target', atTargetRcResult, globalStep)
+            
+            writer.add_scalar('training loss', lossTotalRc.get(), globalStep)
+            writer.add_scalar('training cls loss', lossClsRc.get(), globalStep)
+            writer.add_scalar('training At loss', lossAtRc.get(), globalStep)
+            writer.add_scalar('training At p loss', lossAt_PosRc.get(), globalStep)
+            writer.add_scalar('training At n loss', lossAt_NegRc, globalStep)
+
+            test_prob, gt =clsoutRc.get_result()
+            writer.add_pr_curve('Training Crack PR', gt, test_prob, globalStep)
+            
+            for c in collectors:
+                c.clear()
+            torch.cuda.empty_cache()
+
+def testClsWithAt(model, lossFuncs, testDataLoader, device, writer, step):
+    model.eval()
+    clsRec = ClsReCollector()
+    atRec = ATReCollector()
+    
+    lossClsRc = LossReCollector('test cls loss')
+    lossAt = LossReCollector('test at loss')
+    
+    clsLossFunc = lossFuncs[0]
+    atLossFunc = lossFuncs[1]
+    with torch.no_grad():
+        for data in testDataLoader:
+            inputs, labels, atmask = data[0].to(device), data[1].to(device), data[2].to(device) 
+            clsout, rpn = model(inputs) 
+            clsloss = clsLossFunc(clsout, labels) 
+            ploss, nloss = atLossFunc(rpn, atmask)
+            
+            lossClsRc.add(clsloss)
+            lossAt.add(ploss + nloss)
+            
+            clsRec.add_preds_labels(clsout, labels)
+            atRec.add_pred(rpn)
+            
+    test_probs, gt = clsRec.get_result()
+    closs = lossClsRc.get()
+    atloss = lossAt.get()
+    writer('Test cls loss', closs, step)
+    writer('Test at loss', atloss, step)
+    writer.add_pr_curve('Test Crack PR', gt, test_probs, step)
+    writer.add_pr_curve('Test Health PR', 1-gt, 1-test_probs, step)
+    model.train()
 
 if __name__=='__main__':
     main()

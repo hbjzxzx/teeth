@@ -40,7 +40,7 @@ class config(object):
 
 
     def __getitem__(self, item):
-        value = self.configDic[item]
+        value = self.configDic.get(item)
 
         if isinstance(value, dict):
             subConfig = config(dc=value)
