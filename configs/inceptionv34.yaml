@@ -1,7 +1,7 @@
 train:
     shuffle: on
     num_worker: 4
-    batch_size: 8
+    batch_size: 4
     epoch: 50
     device: cuda
     output_dir: output
