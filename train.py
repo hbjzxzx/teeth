@@ -98,8 +98,12 @@ def main():
     if balance:
         prate = TrainDataSet.prate
         weights = []
-        for _, l in TrainDataSet:
-            weights.append(1-prate if l==1 else prate)
+        if useATLabels:
+            for _, l, _ in TrainDataSet:
+                weights.append(1-prate if l==1 else prate)
+        else:
+            for _, l in TrainDataSet:
+                weights.append(1-prate if l==1 else prate)
         trainSampler = WeightedRandomSampler(weights, len(TrainDataSet), replacement=True)
 
         TrainDataloader = DataLoader(TrainDataSet,
@@ -128,7 +132,10 @@ def main():
         print(f'using optim SGD lr:{lr} momentum:{m} weight_decay:{wd}')
 
     dataiter = iter(TrainDataloader)
-    images, labels = dataiter.next()
+    if useATLabels:
+        images, labels, _ = dataiter.next()
+    else:
+        images, labels = dataiter.next()
     imgGrid = torchvision.utils.make_grid(images)
     matplotlib_imshow(imgGrid, one_channel=True)
     writer.add_image('sample images', imgGrid)
@@ -137,7 +144,7 @@ def main():
     global globalStep
     globalStep = 0
 
-    if useLabels:
+    if useATLabels:
         trainMethod = trainClsWithAt
         lossFunc = [Clscriterion, ATMaskLoss()]
     else:
@@ -272,7 +279,7 @@ def trainClsWithAt(model, opt, lossFuncs, trainDataLoader, testDataLoader, devic
 
         clsoutRc.add_preds_labels(clsout, labels)
         atoutRc.add_pred(rpn)
-        attargetRc.add_pred(atmask)
+        attargetRc.add_label(atmask)
         pnRc.add(labels)
 
         if globalStep % save_step == save_step-1:
@@ -289,16 +296,16 @@ def trainClsWithAt(model, opt, lossFuncs, trainDataLoader, testDataLoader, devic
             print(f"{useTime:5.4f}s for {info_step} step, {useTime/(info_step*batch):5.4f}s per image")
             
 
-            atRcResult = atoutRc.get()
+            atRcResult = atoutRc.getp()
             writer.add_images('train rpn pred', atRcResult, globalStep)
-            atTargetRcResult = attargetRc.get()
+            atTargetRcResult = attargetRc.getl()
             writer.add_images('train rpn target', atTargetRcResult, globalStep)
             
             writer.add_scalar('training loss', lossTotalRc.get(), globalStep)
             writer.add_scalar('training cls loss', lossClsRc.get(), globalStep)
             writer.add_scalar('training At loss', lossAtRc.get(), globalStep)
             writer.add_scalar('training At p loss', lossAt_PosRc.get(), globalStep)
-            writer.add_scalar('training At n loss', lossAt_NegRc, globalStep)
+            writer.add_scalar('training At n loss', lossAt_NegRc.get(), globalStep)
 
             test_prob, gt =clsoutRc.get_result()
             writer.add_pr_curve('Training Crack PR', gt, test_prob, globalStep)
@@ -306,8 +313,10 @@ def trainClsWithAt(model, opt, lossFuncs, trainDataLoader, testDataLoader, devic
             for c in collectors:
                 c.clear()
             torch.cuda.empty_cache()
-
+            info_timeS = time.time()
 def testClsWithAt(model, lossFuncs, testDataLoader, device, writer, step):
+    print('Test start')
+    s = time.time()
     model.eval()
     clsRec = ClsReCollector()
     atRec = ATReCollector()
@@ -333,11 +342,15 @@ def testClsWithAt(model, lossFuncs, testDataLoader, device, writer, step):
     test_probs, gt = clsRec.get_result()
     closs = lossClsRc.get()
     atloss = lossAt.get()
-    writer('Test cls loss', closs, step)
-    writer('Test at loss', atloss, step)
+    predRPN = atRec.getp()
+    writer.add_scalar('Test cls loss', closs, step)
+    writer.add_scalar('Test at loss', atloss, step)
     writer.add_pr_curve('Test Crack PR', gt, test_probs, step)
     writer.add_pr_curve('Test Health PR', 1-gt, 1-test_probs, step)
+    writer.add_images('Test pred rpns', predRPN)
     model.train()
+    useTime = time.time() - s
+    print(f'Test done time:{useTime}s')
 
 if __name__=='__main__':
     main()

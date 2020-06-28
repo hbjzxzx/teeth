@@ -120,18 +120,27 @@ class LossReCollector(Collectors):
 class ATReCollector(Collectors):
     def __init__(self, topK=1):
         self.AT = []
+        self.ATLabel = []
         self.topK = topK
     
     def clear(self):
         self.AT.clear()
+        self.ATLabel.clear()
 
     def add_pred(self, ats:torch.Tensor):
         at = ats[:self.topK].detach().cpu()
-        at = torch.softmax(at, dim=1)
-        at = at.rpn.unsqueeze(1).repeat(1,3,1,1)
+        at = torch.softmax(at, dim=1)[:,1,:,:]
+        at = at.unsqueeze(1).repeat(1,3,1,1)
         self.AT.append(at)
+    
+    def add_label(self, atlabels:torch.Tensor):
+        l = atlabels.detach().unsqueeze(1).repeat(1,3,1,1).cpu()
+        self.ATLabel.append(l)
+    
+    def getl(self):
+        return torch.cat(self.ATLabel)
 
-    def get(self):
+    def getp(self):
         return torch.cat(self.AT)
 
 

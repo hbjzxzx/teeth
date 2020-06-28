@@ -2,7 +2,7 @@ train:
     shuffle: on
     num_worker: 4
     batch_size: 8
-    epoch: 50
+    epoch: 100
     device: cuda
     output_dir: output
     netname: ResnetFPN
